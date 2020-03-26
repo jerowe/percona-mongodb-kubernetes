@@ -1,0 +1,14 @@
+[
+  {
+    "database": "test",
+    "collection": "collection",
+    "count": 10000,
+    "content": {
+      "k": {
+        "type": "int",
+        "minInt": 0,
+        "maxInt": 10
+      }
+    }
+  }
+]
