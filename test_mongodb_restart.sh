@@ -68,7 +68,7 @@ startup(){
         mongodb \
         stable/mongodb-replicaset \
         --values ${values}  > /dev/null 2>&1
-    sleep 120
+    sleep 240
 }
 
 helm repo add stable https://kubernetes-charts.storage.googleapis.com
@@ -100,7 +100,7 @@ echo "#######################################################"
  helm upgrade --install \
     mongodb \
     helm_charts/mongodb-replicaset   > /dev/null 2>&1
-sleep 120
+sleep 240
 add_data_to_mongodb
 get_before_count
 cleanup
