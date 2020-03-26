@@ -81,8 +81,8 @@ echo "#######################################################"
 startup helm_charts/orig-mongodb-replicaset/values.yaml
 add_data_to_mongodb
 get_before_count
-get_after_count
 cleanup
+get_after_count
 
 echo "#######################################################"
 echo "# Testing MongoDB with Percona Mongo and Wired Tiger"
@@ -90,8 +90,8 @@ echo "#######################################################"
 startup helm_charts/percona-wiredtiger-mongodb-replicaset/values.yaml
 add_data_to_mongodb
 get_before_count
-get_after_count
 cleanup
+get_after_count
 
 echo "#######################################################"
 echo "# Testing MongoDB with Percona Mongo"
@@ -99,12 +99,12 @@ echo "# 2 Replicas InMemory and 3rd Persisted"
 echo "#######################################################"
  helm upgrade --install \
     mongodb \
-    helm_charts/mongodb-replicaset
+    helm_charts/mongodb-replicaset   > /dev/null 2>&1
 sleep 120
 add_data_to_mongodb
 get_before_count
-get_after_count
 cleanup
+get_after_count
 
 
 # If you need to troubleshoot here are some logs
