@@ -11,7 +11,7 @@
 #./startup-dev-cluster.sh
 #sleep 120
 
-cleanup(){
+cleanup() {
     helm delete mongodb  > /dev/null 2>&1
 
     kubectl delete pvc datadir-mongodb-mongodb-replicaset-0  > /dev/null 2>&1
@@ -41,7 +41,7 @@ add_data_to_mongodb(){
     kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-0 -- /data/db/mgodatagen -f /data/db/config-test.json -u username -p password -h mongodb-mongodb-replicaset > /dev/null 2>&1
 }
 
-get_before_count(){
+get_before_count() {
     # Get the count
     echo "#######################################################"
     echo "# Getting COUNT BEFORE"
@@ -62,7 +62,7 @@ delete_mongo_release() {
     helm delete mongodb
 }
 
-startup(){
+startup() {
     local values="${1}"
     helm upgrade --install \
         mongodb \
@@ -81,8 +81,10 @@ echo "#######################################################"
 startup helm_charts/orig-mongodb-replicaset/values.yaml
 add_data_to_mongodb
 get_before_count
-cleanup
+helm delete mongodb
+startup helm_charts/orig-mongodb-replicaset/values.yaml
 get_after_count
+cleanup
 
 echo "#######################################################"
 echo "# Testing MongoDB with Percona Mongo and Wired Tiger"
@@ -90,21 +92,28 @@ echo "#######################################################"
 startup helm_charts/percona-wiredtiger-mongodb-replicaset/values.yaml
 add_data_to_mongodb
 get_before_count
-cleanup
+helm delete mongodb
+startup helm_charts/percona-wiredtiger-mongodb-replicaset/values.yaml
 get_after_count
+cleanup
 
 echo "#######################################################"
 echo "# Testing MongoDB with Percona Mongo"
 echo "# 2 Replicas InMemory and 3rd Persisted"
 echo "#######################################################"
- helm upgrade --install \
+helm upgrade --install \
     mongodb \
     helm_charts/mongodb-replicaset   > /dev/null 2>&1
 sleep 240
 add_data_to_mongodb
 get_before_count
-cleanup
+helm delete mongodb
+helm upgrade --install \
+    mongodb \
+    helm_charts/mongodb-replicaset   > /dev/null 2>&1
+sleep 240
 get_after_count
+cleanup
 
 
 # If you need to troubleshoot here are some logs

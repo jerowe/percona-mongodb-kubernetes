@@ -1,0 +1,62 @@
+"stable" has been added to your repositories
+#######################################################
+# Testing MongoDB with Official Mongo image
+#######################################################
+#######################################################
+# Getting COUNT BEFORE
+MongoDB shell version v4.0.17
+connecting to: mongodb://127.0.0.1:27017/test?authSource=admin&gssapiServiceName=mongodb
+Implicit session: session { "id" : UUID("f1085913-3066-4ea9-82ca-3bcfbadfcb31") }
+MongoDB server version: 4.0.17
+10000
+#######################################################
+release "mongodb" uninstalled
+#######################################################
+# Getting COUNT AFTER
+MongoDB shell version v4.0.17
+connecting to: mongodb://127.0.0.1:27017/test?authSource=admin&gssapiServiceName=mongodb
+Implicit session: session { "id" : UUID("6ec4e58f-37f8-4eeb-bc0c-74617405e3e3") }
+MongoDB server version: 4.0.17
+10000
+#######################################################
+#######################################################
+# Testing MongoDB with Percona Mongo and Wired Tiger
+#######################################################
+#######################################################
+# Getting COUNT BEFORE
+Percona Server for MongoDB shell version v4.2.3-4
+connecting to: mongodb://127.0.0.1:27017/test?authSource=admin&compressors=disabled&gssapiServiceName=mongodb
+Implicit session: session { "id" : UUID("6803b499-254c-48e9-95e3-cac406ce64c5") }
+Percona Server for MongoDB server version: v4.2.3-4
+10000
+#######################################################
+release "mongodb" uninstalled
+#######################################################
+# Getting COUNT AFTER
+Percona Server for MongoDB shell version v4.2.3-4
+connecting to: mongodb://127.0.0.1:27017/test?authSource=admin&compressors=disabled&gssapiServiceName=mongodb
+Implicit session: session { "id" : UUID("e64edffa-25b0-469d-b71c-3735dae425eb") }
+Percona Server for MongoDB server version: v4.2.3-4
+10000
+#######################################################
+#######################################################
+# Testing MongoDB with Percona Mongo
+# 2 Replicas InMemory and 3rd Persisted
+#######################################################
+#######################################################
+# Getting COUNT BEFORE
+Percona Server for MongoDB shell version v4.2.3-4
+connecting to: mongodb://127.0.0.1:27017/test?authSource=admin&compressors=disabled&gssapiServiceName=mongodb
+Implicit session: session { "id" : UUID("96193edc-1aef-459f-bb69-dee37db104a8") }
+Percona Server for MongoDB server version: v4.2.3-4
+10000
+#######################################################
+release "mongodb" uninstalled
+#######################################################
+# Getting COUNT AFTER
+Percona Server for MongoDB shell version v4.2.3-4
+connecting to: mongodb://127.0.0.1:27017/test?authSource=admin&compressors=disabled&gssapiServiceName=mongodb
+Implicit session: session { "id" : UUID("201bf5f8-6368-4d7f-b0be-86b1b89a8dae") }
+Percona Server for MongoDB server version: v4.2.3-4
+0
+#######################################################
