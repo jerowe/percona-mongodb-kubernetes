@@ -190,11 +190,11 @@ JOURNAL=""
 
 log "Service name: ${service_name}"
 
-if [[ "${service_name}" = *"mongodb-replicaset-0"* ]]; then
-    STORAGE_ENGINE="wiredTiger"
-    DB_DIR="db"
-    JOURNAL=""
-fi
+#if [[ "${service_name}" = *"mongodb-replicaset-0"* ]]; then
+#    STORAGE_ENGINE="wiredTiger"
+#    DB_DIR="db"
+#    JOURNAL=""
+# fi
 
 mongod \
     --storageEngine=${STORAGE_ENGINE} ${JOURNAL} \
@@ -223,6 +223,7 @@ for peer in "${peers[@]}"; do
         primary="${peer}"
         break
     fi
+
 done
 
 ####################################################
@@ -255,14 +256,14 @@ elif [[ -n "${primary}" ]]; then
 
         ####################################################
         # mongodb-replicaset-2
-        # Configure the 3rd replicaset to persist
         ####################################################
         if [[ "${service_name}" = *"mongodb-replicaset-2"* ]]; then
-#          if (mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "rs.add({'host': '${service_name}', '_id': 2, hidden: true, priority: 0 })" | grep 'Quorum check failed'); then
           if (mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "rs.add({'host': '${service_name}', '_id': 2 })" | grep 'Quorum check failed'); then
               log 'Quorum check failed, unable to join replicaset. Exiting prematurely.'
               exit 1
           fi
+          # Go back to the primary and make it step down
+
         fi
 
     fi
@@ -272,34 +273,6 @@ elif [[ -n "${primary}" ]]; then
     retry_until "${service_name}" "rs.status().myState" "2"
     log '✓ Replica reached SECONDARY state.'
 
-####################################################
-# Once all the replicas are up make the
-# master step down
-# Make the replicaset-0 stepdown
-# Any of the other ones is FINE for the master
-####################################################
-#if [[ "${service_name}" = *"mongodb-replicaset-2"* ]]; then
-#    mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "rs.stepDown()"
-#    sleep 30
-#
-#    # Now find the new primary
-#    for peer in "${peers[@]}"; do
-#        log "Checking if ${peer} is primary"
-#        # Check rs.status() first since it could be in primary catch up mode which db.isMaster() doesn't show
-#
-#        if [[ $(mongo admin --host "${peer}" "${admin_creds[@]}" "${ssl_args[@]}" --quiet --eval "rs.status().myState") == "1" ]]; then
-#            retry_until "${peer}" "db.isMaster().ismaster" "true"
-#            log "Found primary: ${peer}"
-#            primary="${peer}"
-#            break
-#        fi
-#    done
-#
-#    mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" < /init/configure_persisted_replica.js
-#fi
-
-
-############################################################################################
 
 ##############################################
 # mongodb-replicaset-0
@@ -307,7 +280,7 @@ elif [[ -n "${primary}" ]]; then
 ##############################################
 elif (mongo "${ssl_args[@]}" --eval "rs.status()" | grep "no replset config has been received"); then
     log "Initiating a new replica set with myself ($service_name)..."
-    mongo "${ssl_args[@]}" --eval "rs.initiate({'_id': '$replica_set', 'settings': {'replicasetId': ObjectId('5e7c69ccf58de34d19431911')}, 'writeConcernMajorityJournalDefault': false, 'members': [{'_id': 0, 'host': '$service_name'}]})"
+    mongo "${ssl_args[@]}" --eval "rs.initiate({'_id': '$replica_set', 'writeConcernMajorityJournalDefault': false, 'members': [{'_id': 0, 'host': '$service_name'}]})"
 #    mongo "${ssl_args[@]}" < /init/configure_primary.js
 
     sleep 3

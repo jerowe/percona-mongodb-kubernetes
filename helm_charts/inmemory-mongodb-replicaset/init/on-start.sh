@@ -89,13 +89,7 @@ init_mongod_standalone() {
 
     local port="27018"
     log "Starting a MongoDB instance as standalone..."
-#        --storage.journal.enabled=false \
-    mongod \
-        --storageEngine=inMemory \
-        --config /data/configdb/mongod.conf \
-        --dbpath=/data/inmemorydb "${auth_args[@]}" "${ssl_server_args[@]}" \
-        --port "${port}" --bind_ip=0.0.0.0 2>&1 | tee -a /work-dir/log.txt 1>&2 &
-
+    mongod --config /data/configdb/mongod.conf --dbpath=/data/db "${auth_args[@]}" "${ssl_server_args[@]}" --port "${port}" --bind_ip=0.0.0.0 2>&1 | tee -a /work-dir/log.txt 1>&2 &
     export pid=$!
     trap shutdown_mongo EXIT
     log "Waiting for MongoDB to be ready..."
@@ -103,16 +97,6 @@ init_mongod_standalone() {
     log "Running init js script on standalone mongod"
     mongo admin --port "${port}" "${admin_creds[@]}" "${ssl_args[@]}" /init/initMongodStandalone.js
     shutdown_mongo "localhost:${port}"
-}
-
-check_replicaset_added(){
-    local primary="${1}"
-    local servicename="${1}"
-
-  if (mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "rs.add({'host': '${service_name}', '_id': '${service_name}' })" | grep 'Quorum check failed'); then
-      log 'Quorum check failed, unable to join replicaset. Exiting prematurely.'
-      exit 1
-  fi
 }
 
 my_hostname=$(hostname)
@@ -176,33 +160,7 @@ fi
 
 log "Peers: ${peers[*]}"
 log "Starting a MongoDB replica"
-
-
-##############################################
-# TODO
-# The persisted replicaset is hardcoded
-# as mongodb-replicaset-2
-##############################################
-STORAGE_ENGINE="inMemory"
-DB_DIR="inmemorydb"
-#JOURNAL="--nojournal"
-JOURNAL=""
-
-log "Service name: ${service_name}"
-
-if [[ "${service_name}" = *"mongodb-replicaset-0"* ]]; then
-    STORAGE_ENGINE="wiredTiger"
-    DB_DIR="db"
-    JOURNAL=""
-fi
-
-mongod \
-    --storageEngine=${STORAGE_ENGINE} ${JOURNAL} \
-    --config /data/configdb/mongod.conf \
-    --dbpath=/data/${DB_DIR} \
-    --replSet="$replica_set" \
-    --port="${port}" "${auth_args[@]}" "${ssl_server_args[@]}" \
-    --bind_ip=0.0.0.0 2>&1 | tee -a /work-dir/log.txt 1>&2 &
+mongod --config /data/configdb/mongod.conf --dbpath=/data/db --replSet="$replica_set" --port="${port}" "${auth_args[@]}" "${ssl_server_args[@]}" --bind_ip=0.0.0.0 2>&1 | tee -a /work-dir/log.txt 1>&2 &
 pid=$!
 trap shutdown_mongo EXIT
 
@@ -210,14 +168,11 @@ log "Waiting for MongoDB to be ready..."
 retry_until "localhost" "db.adminCommand('ping').ok" "1"
 log "Initialized."
 
-####################################################
 # try to find a master
-####################################################
 for peer in "${peers[@]}"; do
     log "Checking if ${peer} is primary"
     # Check rs.status() first since it could be in primary catch up mode which db.isMaster() doesn't show
-
-    if [[ $(mongo admin --host "${peer}" "${admin_creds[@]}" "${ssl_args[@]}" --quiet --eval "rs.status().myState") == "1" ]]; then
+    if [[ $(mongo admin --host "${peer}" "${admin_creds[@]}" "${ssl_args[@]}" --quiet --eval "rs.status().myState" | tail -n1) == "1" ]]; then
         retry_until "${peer}" "db.isMaster().ismaster" "true"
         log "Found primary: ${peer}"
         primary="${peer}"
@@ -225,46 +180,15 @@ for peer in "${peers[@]}"; do
     fi
 done
 
-####################################################
-# Replica is a primary
-####################################################
 if [[ "${primary}" = "${service_name}" ]]; then
     log "This replica is already PRIMARY"
-    mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" < /init/turn_off_writeconcern.js
-
-####################################################
-# Replica is NOT primary
-####################################################
 elif [[ -n "${primary}" ]]; then
-    # First check to see if the a replica with the same host already exists
-
-    if [[ $(mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --quiet --eval "rs.conf().members.findIndex(m => m.host == '${service_name}:${port}')") == "-1" ]]; then
-        log "Adding myself (${service_name}) to replica set..."
-
-        ####################################################
-        # mongodb-replicaset-1
-        # Configure the 2rd replicaset to be in memory
-        # If its the last one add it
-        ####################################################
-        if [[ "${service_name}" = *"mongodb-replicaset-1"* ]]; then
-          if (mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "rs.add({'host': '${service_name}', '_id': 1 })" | grep 'Quorum check failed'); then
-              log 'Quorum check failed, unable to join replicaset. Exiting prematurely.'
-              exit 1
-          fi
-        fi
-
-        ####################################################
-        # mongodb-replicaset-2
-        # Configure the 3rd replicaset to persist
-        ####################################################
-        if [[ "${service_name}" = *"mongodb-replicaset-2"* ]]; then
-#          if (mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "rs.add({'host': '${service_name}', '_id': 2, hidden: true, priority: 0 })" | grep 'Quorum check failed'); then
-          if (mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "rs.add({'host': '${service_name}', '_id': 2 })" | grep 'Quorum check failed'); then
-              log 'Quorum check failed, unable to join replicaset. Exiting prematurely.'
-              exit 1
-          fi
-        fi
-
+    if [[ $(mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --quiet --eval "rs.conf().members.findIndex(m => m.host == '${service_name}:${port}')" | tail -n1) == "-1" ]]; then
+      log "Adding myself (${service_name}) to replica set..."
+      if (mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "rs.add('${service_name}')" | grep 'Quorum check failed'); then
+          log 'Quorum check failed, unable to join replicaset. Exiting prematurely.'
+          exit 1
+      fi
     fi
 
     sleep 3
@@ -272,43 +196,9 @@ elif [[ -n "${primary}" ]]; then
     retry_until "${service_name}" "rs.status().myState" "2"
     log '✓ Replica reached SECONDARY state.'
 
-####################################################
-# Once all the replicas are up make the
-# master step down
-# Make the replicaset-0 stepdown
-# Any of the other ones is FINE for the master
-####################################################
-#if [[ "${service_name}" = *"mongodb-replicaset-2"* ]]; then
-#    mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "rs.stepDown()"
-#    sleep 30
-#
-#    # Now find the new primary
-#    for peer in "${peers[@]}"; do
-#        log "Checking if ${peer} is primary"
-#        # Check rs.status() first since it could be in primary catch up mode which db.isMaster() doesn't show
-#
-#        if [[ $(mongo admin --host "${peer}" "${admin_creds[@]}" "${ssl_args[@]}" --quiet --eval "rs.status().myState") == "1" ]]; then
-#            retry_until "${peer}" "db.isMaster().ismaster" "true"
-#            log "Found primary: ${peer}"
-#            primary="${peer}"
-#            break
-#        fi
-#    done
-#
-#    mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" < /init/configure_persisted_replica.js
-#fi
-
-
-############################################################################################
-
-##############################################
-# mongodb-replicaset-0
-# Add in the first and PRIMARY replica
-##############################################
 elif (mongo "${ssl_args[@]}" --eval "rs.status()" | grep "no replset config has been received"); then
     log "Initiating a new replica set with myself ($service_name)..."
-    mongo "${ssl_args[@]}" --eval "rs.initiate({'_id': '$replica_set', 'settings': {'replicasetId': ObjectId('5e7c69ccf58de34d19431911')}, 'writeConcernMajorityJournalDefault': false, 'members': [{'_id': 0, 'host': '$service_name'}]})"
-#    mongo "${ssl_args[@]}" < /init/configure_primary.js
+    mongo "${ssl_args[@]}" --eval "rs.initiate({'_id': '$replica_set', 'members': [{'_id': 0, 'host': '$service_name'}]})"
 
     sleep 3
     log 'Waiting for replica to reach PRIMARY state...'
@@ -322,19 +212,15 @@ elif (mongo "${ssl_args[@]}" --eval "rs.status()" | grep "no replset config has 
     fi
 fi
 
+# User creation
 if [[ -n "${primary}" && "$AUTH" == "true" && "$METRICS" == "true" ]]; then
-    metric_user_count=$(mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "db.system.users.find({user: '${metrics_user}'}).count()" --quiet)
+    metric_user_count=$(mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "db.system.users.find({user: '${metrics_user}'}).count()" --quiet | tail -n1)
     if [[ "${metric_user_count}" == "0" ]]; then
         log "Creating clusterMonitor user..."
         mongo admin --host "${primary}" "${admin_creds[@]}" "${ssl_args[@]}" --eval "db.createUser({user: '${metrics_user}', pwd: '${metrics_password}', roles: [{role: 'clusterMonitor', db: 'admin'}, {role: 'read', db: 'local'}]})"
     fi
 fi
 
-
 log "MongoDB bootstrap complete"
-if [ -z "${INIT_CONTAINER}" ]
-then
-    tail -f /work-dir/log.txt
-else
-    exit 0
-fi
+exit 0
+

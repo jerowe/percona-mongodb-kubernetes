@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-#!/usr/bin/env bash
 
 ############################################
 # DO NOT RUN ON A PRODUCTION INSTANCE
@@ -75,52 +74,74 @@ helm repo add stable https://kubernetes-charts.storage.googleapis.com
 
 cleanup
 
-echo "#######################################################"
-echo "# Testing MongoDB with Official Mongo image"
-echo "#######################################################"
-startup helm_charts/orig-mongodb-replicaset/values.yaml
-add_data_to_mongodb
-get_before_count
-helm delete mongodb
-startup helm_charts/orig-mongodb-replicaset/values.yaml
-get_after_count
-cleanup
+#echo "#######################################################"
+#echo "# Testing MongoDB with Official Mongo image"
+#echo "#######################################################"
+#startup helm_charts/orig-mongodb-replicaset/values.yaml
+#add_data_to_mongodb
+#get_before_count
+#helm delete mongodb
+#startup helm_charts/orig-mongodb-replicaset/values.yaml
+#get_after_count
+#cleanup
 
-echo "#######################################################"
-echo "# Testing MongoDB with Percona Mongo and Wired Tiger"
-echo "#######################################################"
-startup helm_charts/percona-wiredtiger-mongodb-replicaset/values.yaml
-add_data_to_mongodb
-get_before_count
-helm delete mongodb
-startup helm_charts/percona-wiredtiger-mongodb-replicaset/values.yaml
-get_after_count
-cleanup
+#echo "#######################################################"
+#echo "# Testing MongoDB with Percona Mongo and Wired Tiger"
+#echo "#######################################################"
+#startup helm_charts/percona-wiredtiger-mongodb-replicaset/values.yaml
+#add_data_to_mongodb
+#get_before_count
+#helm delete mongodb
+#startup helm_charts/percona-wiredtiger-mongodb-replicaset/values.yaml
+#get_after_count
+#cleanup
 
 echo "#######################################################"
 echo "# Testing MongoDB with Percona Mongo"
 echo "# 2 Replicas InMemory and 3rd Persisted"
 echo "#######################################################"
+#helm upgrade --install \
+#    mongodb \
+#    helm_charts/mongodb-replicaset   > /dev/null 2>&1
+#sleep 240
+#add_data_to_mongodb
+#get_before_count
+#helm delete mongodb
+#helm upgrade --install \
+#    mongodb \
+#    helm_charts/mongodb-replicaset   > /dev/null 2>&1
+#sleep 240
+#get_after_count
+#cleanup
+
 helm upgrade --install \
     mongodb \
-    helm_charts/mongodb-replicaset   > /dev/null 2>&1
+    helm_charts/mongodb-replicaset
 sleep 240
+# We have to make the replicaset-0 (wiredTiger) step Down
+kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-0 -- mongo admin --authenticationDatabase admin -u username -p password  --eval "rs.stepDown()"
+# Make the members[1] hidden: true priority: 0
+kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-1 -- mongo admin --authenticationDatabase admin -u username -p password < /init/configure_persisted_replica.js
 add_data_to_mongodb
 get_before_count
+# The NEW primary is mongodb-mongodb-replicaset-1
+kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-1 -- mongo test --authenticationDatabase admin -u username -p password  --eval "db.collection.count()"
 helm delete mongodb
 helm upgrade --install \
     mongodb \
-    helm_charts/mongodb-replicaset   > /dev/null 2>&1
+    helm_charts/mongodb-replicaset
 sleep 240
+# Check that its the master
+kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-0 -- mongo admin --authenticationDatabase admin -u username -p password  --eval "rs.stepDown()"
+kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-1 -- mongo admin --authenticationDatabase admin -u username -p password < /init/configure_persisted_replica.js
 get_after_count
-cleanup
 
+## If you need to troubleshoot here are some logs
+## Primary
+##kubectl logs --container mongodb-replicaset mongodb-mongodb-replicaset-0
+## Persisted
+##kubectl logs --container mongodb-replicaset mongodb-mongodb-replicaset-2
+## You can also just drop into a shell and see what's happening
+##kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-2 bash
+##kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-0 -- mongo admin -u username -p password
 
-# If you need to troubleshoot here are some logs
-# Primary
-#kubectl logs --container mongodb-replicaset mongodb-mongodb-replicaset-0
-# Persisted
-#kubectl logs --container mongodb-replicaset mongodb-mongodb-replicaset-2
-# You can also just drop into a shell and see what's happening
-#kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-2 bash
-#kubectl exec -it --container mongodb-replicaset mongodb-mongodb-replicaset-0 -- mongo admin -u username -p password
